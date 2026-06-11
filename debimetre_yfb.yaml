@@ -1,0 +1,18 @@
+sensor:
+
+  - platform: pulse_counter
+    pin: ${sensor_pin}
+    id: flow_raw
+    update_interval: ${sensor_pulse_update}
+    unit_of_measurement: "pulses/s"    
+
+  - platform: template
+    id: flow_rate_lmin
+    name: "${sensor_name}"
+    unit_of_measurement: "L/min"
+    update_interval: ${sensor_pulse_update}
+
+    lambda: |-
+      const float pulses_per_liter = ${sensor_pulse_factor};
+      float pulses_per_sec = id(flow_raw).state;
+      return (pulses_per_sec * 60.0) / pulses_per_liter;

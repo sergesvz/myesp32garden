@@ -1,0 +1,21 @@
+esphome:
+  name: ${device_name}
+  includes:
+    - packages/vanne/events.h
+
+  on_boot:
+    priority: -10
+    then:
+      - script.execute: compute_next_event
+      - script.execute: go_sleep
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+  
+logger:
+  level: INFO
+  logs:
+    wifi: WARN
+    api: WARN

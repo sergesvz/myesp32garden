@@ -1,0 +1,20 @@
+# -------------------------
+# DEEP SLEEP
+# Deep sleep uniquement si :
+# - pas d’arrosage
+# - pas de maintenance
+# - pas de flow actif
+# pin: GPIO0, GPIO2, GPIO4, GPIO12, GPIO13, GPIO14, GPIO15, GPIO25, GPIO26, GPIO27, GPIO32, GPIO39
+# -------------------------
+
+deep_sleep:
+  id: ${deep_sleep_id}
+
+  wakeup_pin:
+    number: ${deep_sleep_pin}
+    inverted: true
+
+status_led:
+  pin:
+    number: ${deep_sleep_status_pin}
+    inverted: true

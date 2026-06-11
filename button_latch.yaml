@@ -1,0 +1,28 @@
+# -------------------------
+# BOUTON MAINTENANCE
+# -------------------------
+binary_sensor:
+
+  - platform: gpio
+    pin:
+      number: ${switch_pin}
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Maintenance bouton"
+
+    filters:
+      - delayed_on: 50ms   # anti-rebond
+
+#    on_press:
+#      - logger.log: "Bouton pressé – prévention du deep‑sleep"
+#      - deep_sleep.prevent: deep_sleep_ctrl   # empêche le sommeil tant que le bouton est enfoncé  
+
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - logger.log: "Bouton pressé – prévention du deep‑sleep"
+          - deep_sleep.prevent: deep_sleep_ctrl   # empêche le sommeil tant que le bouton est enfoncé  
+          - lambda: |-
+              id(auto_mode) = false;
+              id(maintenance_mode) = true;

@@ -1,0 +1,81 @@
+globals:
+
+  - id: event_valve
+    type: int[32]
+
+  - id: event_hour
+    type: int[32]
+
+  - id: event_minute
+    type: int[32]
+
+  - id: event_duration
+    type: int[32]
+
+  - id: event_mask
+    type: uint8_t[32]
+
+  - id: active_valve
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: irrigation_end_epoch
+    type: uint32_t
+    restore_value: no
+
+  - id: next_event_index
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+  - id: next_wake_epoch
+    type: uint64_t
+    restore_value: no
+    initial_value: '60000'
+
+  - id: last_flow_millis
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: auto_mode
+    type: bool
+    restore_value: yes
+    initial_value: "true"
+
+  - id: maintenance_mode
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: maintenance_timer
+    type: int
+    restore_value: no
+    initial_value: '300'
+
+  - id: irrigation_lock
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: debug_mode
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+switch:
+  # Switch DEBUG => STOP DEEP SLEEP
+  - platform: template
+    name: "Mode Debug Irrigation"
+    id: debug_switch
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+    turn_on_action:
+      - lambda: |-
+          id(debug_mode) = true;
+
+    turn_off_action:
+      - lambda: |-
+          id(debug_mode) = false;

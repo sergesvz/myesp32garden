@@ -1,0 +1,77 @@
+substitutions:
+  device_name: "myesp32garden"
+#  api_key: !secret api_385e88_key 
+
+packages:
+
+  boot:    !include packages/on_boot.yaml
+  globals: !include packages/globals.yaml
+  api_key: !include packages/secrets/esp_385e88.yaml
+
+  network: 
+    !include  
+    file: packages/network.yaml
+    vars:
+      network_ip: "192.168.1.44"
+
+  deep_sleep:
+    !include  
+    file: packages/deep_sleep.yaml
+    vars:
+      deep_sleep_id: deep_sleep_ctrl
+      deep_sleep_pin: GPIO14
+      deep_sleep_status_pin: GPIO3    
+
+  latch1: 
+    !include  
+    file: packages/sensors/button_latch.yaml
+    vars:
+      sensor_name: "Maintenance button"
+      switch_pin: GPIO4
+
+  vanne1: 
+    !include  
+    file: packages/vanne/parameters.yaml
+    vars:
+      vanne_id: 1
+      vanne_pin: GPIO25
+
+  vanne2:
+    !include   
+    file: packages/vanne/parameters.yaml
+    vars:
+      vanne_id: 2
+      vanne_pin: GPIO26      
+  vanne3: 
+    !include  
+    file: packages/vanne/parameters.yaml
+    vars:
+      vanne_id: 3
+      vanne_pin: GPIO27      
+  vanne4: 
+    !include
+    file: packages/vanne/parameters.yaml
+    vars:
+      vanne_id: 4
+      vanne_pin: GPIO32      
+
+  soil1:
+    !include
+    file: packages/sensors/soil.yaml
+    vars:
+      sensor_name: "Humidité Zone"
+      sensor_id: soil1
+      sensor_pin: GPIO34
+
+  debimetre1:
+    !include
+    file: "packages/sensors/debimetre_yfb.yaml"
+    vars:
+      sensor_name: "Débit"
+      sensor_id: flow_rate
+      sensor_pin: GPIO33
+      sensor_pulse_factor: "450.0"
+      sensor_pulse_update: "5s"
+
+# scripts: !include packages/script.yaml
+  scheduler: !include packages/scheduler.yaml

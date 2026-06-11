@@ -1,0 +1,195 @@
+
+script:
+
+  # -------------------------
+  # COMPUTE NEXT EVENT
+  # -------------------------
+
+  - id: compute_next_event
+    mode: restart
+    then:
+    - lambda: |-
+        auto now = id(ntp_time).now();
+        if (!now.is_valid())
+          return;
+
+        int current = now.hour * 60 + now.minute;
+        int day = now.day_of_week - 1;
+
+        int best = -1;
+        int best_delta = 1440;
+
+        for (int i = 0; i < 32; i++)
+        {
+          if (id(event_valve)[i] == 0)
+            continue;
+
+          uint8_t mask = id(event_mask)[i];
+          if (mask == 0)
+            continue;
+
+          if (!(mask & (1 << day)))
+            continue;
+
+          int t = id(event_hour)[i] * 60 + id(event_minute)[i];
+
+          int delta = t - current;
+          if (delta < 0) delta += 1440;
+
+          if (delta < best_delta)
+          {
+            best_delta = delta;
+            best = i;
+          }
+        }
+
+        id(next_event_index) = best;
+
+        if (best >= 0)
+        {
+          id(next_wake_epoch) =
+            now.timestamp + (best_delta * 60);
+        }
+        else
+        {
+          // fallback safe sleep 5 min
+          id(next_wake_epoch) = now.timestamp + 300;
+        }
+
+ 
+  # -------------------------
+  # SCHEDULER VANNES
+  # -------------------------
+
+  - id: execute_if_needed
+    mode: restart
+    then:
+      - lambda: |-
+          auto now = id(ntp_time).now();
+
+          if (!now.is_valid())
+          {
+            id(go_sleep).execute();
+            return;
+          }
+
+          // STOP si durée terminée
+          if (id(active_valve) != 0 &&
+              id(irrigation_end_epoch) > 0 &&
+              now.timestamp >= id(irrigation_end_epoch))
+          {
+            ESP_LOGI("scheduler", "Fermeture vanne %d", id(active_valve));
+
+            switch (id(active_valve))
+            {
+              case 1: id(stop_vanne1).execute(); break;
+              case 2: id(stop_vanne2).execute(); break;
+              case 3: id(stop_vanne3).execute(); break;
+              case 4: id(stop_vanne4).execute(); break;
+            }
+
+            id(active_valve) = 0;
+            id(irrigation_end_epoch) = 0;
+          }
+
+          int idx = id(next_event_index);
+
+          if (idx < 0)
+          {
+            return;
+          }
+
+          int valve = id(event_valve)[idx];
+          int duration = id(event_duration)[idx];
+
+          ESP_LOGI("sched", "Valve %d start", valve);
+
+          switch (valve)
+          {
+            case 1: id(run_vanne1).execute(); break;
+            case 2: id(run_vanne2).execute(); break;
+            case 3: id(run_vanne3).execute(); break;
+            case 4: id(run_vanne4).execute(); break;
+            default: return;
+          }
+
+          id(active_valve) = valve;
+          id(irrigation_end_epoch) =
+            now.timestamp + (duration * 60);
+
+          // recalcul immédiat NEXT EVENT
+          id(compute_next_event).execute();
+
+      - script.execute: go_sleep
+
+   # -------------------------
+  # Go SLEEP
+  # -------------------------
+
+  - id: go_sleep
+    mode: restart
+    then:
+
+      - script.execute: compute_next_event
+
+      - if:
+          condition:
+            lambda: |-
+              return id(debug_mode);
+
+          then:
+            - logger.log: "Deep sleep bloqué (mode debug actif)"
+            - delay: 1s
+            - script.execute: execute_if_needed
+ #           - stop_script: go_sleep
+
+      - deep_sleep.enter:
+          id: deep_sleep_ctrl
+          sleep_duration: !lambda |-
+            auto now = id(ntp_time).now();
+
+            if (!now.is_valid())
+              return (uint32_t)60000;
+
+            int32_t diff =
+              (int32_t)(id(next_wake_epoch) - now.timestamp);
+
+            if (diff <= 0)
+              return (uint32_t)60000;
+
+            if (diff > 86400)
+              return (uint32_t)86400000;
+
+            return (uint32_t)diff * 1000;
+
+
+interval:
+  # -------------------------
+  # FLOW / VOLUME ACCOUNTING
+  # -------------------------
+  - interval: 60s
+    then:
+      - lambda: |-
+          if (id(active_valve) == 0)
+            return;
+
+          uint32_t now_m = millis();
+
+          if (id(last_flow_millis) == 0)
+          {
+            id(last_flow_millis) = now_m;
+            return;
+          }
+
+          float dt_min = (now_m - id(last_flow_millis)) / 60000.0;
+          id(last_flow_millis) = now_m;
+
+          float litres = id(flow_rate_lmin).state * dt_min;
+
+          switch (id(active_valve))
+          {
+            case 1: id(vanne1_volume) += litres; break;
+            case 2: id(vanne2_volume) += litres; break;
+            case 3: id(vanne3_volume) += litres; break;
+            case 4: id(vanne4_volume) += litres; break;
+          }
