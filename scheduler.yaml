@@ -1,4 +1,3 @@
-
 script:
 
   # -------------------------
@@ -8,188 +7,313 @@ script:
   - id: compute_next_event
     mode: restart
     then:
+    - logger.log: "Compute Next Event"
     - lambda: |-
         auto now = id(ntp_time).now();
-        if (!now.is_valid())
-          return;
+        if (!now.is_valid()) return;
 
         int current = now.hour * 60 + now.minute;
         int day = now.day_of_week - 1;
+        if (day < 0 || day > 6) return;
 
-        int best = -1;
-        int best_delta = 1440;
+        // STATE INIT
+        int best_index = -1;
+        int best_delta = 10080; // 7 jours  => TODo 1 jour
 
-        for (int i = 0; i < 32; i++)
+        // PLC LOOP
+        for (int i = 0; i < 4; i++)
         {
-          if (id(event_valve)[i] == 0)
-            continue;
+          uint8_t mask = id(vanne_day)[i];
+       
+          if (mask == 0) continue;
 
-          uint8_t mask = id(event_mask)[i];
-          if (mask == 0)
-            continue;
+          int t = (id(vanne_hour)[i]) * 60 + id(vanne_minute)[i];
 
-          if (!(mask & (1 << day)))
-            continue;
+          if (id(vanne_duration)[i] <= 0) continue;
 
-          int t = id(event_hour)[i] * 60 + id(event_minute)[i];
-
-          int delta = t - current;
-          if (delta < 0) delta += 1440;
-
-          if (delta < best_delta)
+          for (int offset = 0; offset < 7; offset++)
           {
-            best_delta = delta;
-            best = i;
+            int test_day = (day + offset) % 7;
+
+            if (!(mask & (1 << test_day))) continue;
+
+            //delta = temps (min) restant jusqu'au prochain événement 
+            int delta = offset * 1440 + t - current;
+            if (delta < 0) delta += 10080;
+
+            if (delta < best_delta)
+            {
+              best_delta = delta;
+              best_index = i;
+            }
           }
         }
 
-        id(next_event_index) = best;
+        // -------------------------
+        // sécurité minimale
+        // -------------------------
+        if (best_index >= 0 && best_delta < 1)
+          best_delta = 1;
 
-        if (best >= 0)
+        id(next_event_index) = best_index;
+
+        if (best_index >= 0)
         {
-          id(next_wake_epoch) =
-            now.timestamp + (best_delta * 60);
+          id(next_irrigation_epoch) = now.timestamp + (best_delta * 60);
         }
         else
         {
           // fallback safe sleep 5 min
-          id(next_wake_epoch) = now.timestamp + 300;
+          id(next_irrigation_epoch) = now.timestamp + 300;
         }
 
- 
-  # -------------------------
-  # SCHEDULER VANNES
+        ESP_LOGI("sched", "Next event idx=%d delta=%d", best_index, best_delta);
+
+# -------------------------
+  # Start SCHEDULER ?
   # -------------------------
 
-  - id: execute_if_needed
-    mode: restart
+  - id: scheduler_check
+    mode: single
     then:
-      - lambda: |-
-          auto now = id(ntp_time).now();
 
+      - lambda: |-
+
+          //check good Event
+          //---------------
+          if (id(fsm_lock))
+          {
+            ESP_LOGW("scheduler", "FSM already running");
+            return;
+          }
+
+          if (id(driver_busy))
+          {
+              ESP_LOGD("scheduler", "Driver busy");
+              return;
+          }
+
+          //check good time
+          //---------------
+          auto now = id(ntp_time).now();
           if (!now.is_valid())
           {
-            id(go_sleep).execute();
+            ESP_LOGW("scheduler", "Time not valid -> skip");
+            id(system_ready) = false;
             return;
           }
+          uint32_t now_epoch = now.timestamp;
+          ESP_LOGI("scheduler", "now=%u next=%u",  now_epoch, id(next_irrigation_epoch));
 
-          // STOP si durée terminée
-          if (id(active_valve) != 0 &&
-              id(irrigation_end_epoch) > 0 &&
-              now.timestamp >= id(irrigation_end_epoch))
+          // CHECK DUE
+          // -------------------------
+          if (id(next_irrigation_epoch) == 0)
           {
-            ESP_LOGI("scheduler", "Fermeture vanne %d", id(active_valve));
-
-            switch (id(active_valve))
-            {
-              case 1: id(stop_vanne1).execute(); break;
-              case 2: id(stop_vanne2).execute(); break;
-              case 3: id(stop_vanne3).execute(); break;
-              case 4: id(stop_vanne4).execute(); break;
-            }
-
-            id(active_valve) = 0;
-            id(irrigation_end_epoch) = 0;
-          }
-
-          int idx = id(next_event_index);
-
-          if (idx < 0)
-          {
+            ESP_LOGW("scheduler", "No schedule defined");
             return;
           }
-
-          int valve = id(event_valve)[idx];
-          int duration = id(event_duration)[idx];
-
-          ESP_LOGI("sched", "Valve %d start", valve);
-
-          switch (valve)
+          else
           {
-            case 1: id(run_vanne1).execute(); break;
-            case 2: id(run_vanne2).execute(); break;
-            case 3: id(run_vanne3).execute(); break;
-            case 4: id(run_vanne4).execute(); break;
-            default: return;
+            id(system_ready) = true;
           }
 
-          id(active_valve) = valve;
-          id(irrigation_end_epoch) =
-            now.timestamp + (duration * 60);
+          if (now_epoch >= id(next_irrigation_epoch))
+          {
+            ESP_LOGI("scheduler", "IRRIGATION DUE");
+            // START  FSM
 
-          // recalcul immédiat NEXT EVENT
-          id(compute_next_event).execute();
+            id(fsm_lock) = true;
+            id(machine_state) = ST_SELECT_VANNE;
+            id(vanne_active) = -1;    
+          }
+  
 
-      - script.execute: go_sleep
-
-   # -------------------------
-  # Go SLEEP
   # -------------------------
-
-  - id: go_sleep
+  # SCHEDULER FSM
+  # -------------------------
+  - id: fsm_tick
     mode: restart
     then:
-
-      - script.execute: compute_next_event
-
-      - if:
-          condition:
-            lambda: |-
-              return id(debug_mode);
-
-          then:
-            - logger.log: "Deep sleep bloqué (mode debug actif)"
-            - delay: 1s
-            - script.execute: execute_if_needed
- #           - stop_script: go_sleep
-
-      - deep_sleep.enter:
-          id: deep_sleep_ctrl
-          sleep_duration: !lambda |-
-            auto now = id(ntp_time).now();
-
-            if (!now.is_valid())
-              return (uint32_t)60000;
-
-            int32_t diff =
-              (int32_t)(id(next_wake_epoch) - now.timestamp);
-
-            if (diff <= 0)
-              return (uint32_t)60000;
-
-            if (diff > 86400)
-              return (uint32_t)86400000;
-
-            return (uint32_t)diff * 1000;
-
-
-interval:
-  # -------------------------
-  # FLOW / VOLUME ACCOUNTING
-  # -------------------------
-  - interval: 60s
-    then:
       - lambda: |-
-          if (id(active_valve) == 0)
-            return;
 
-          uint32_t now_m = millis();
+          // FSM mode Auto en cours
+          if (id(fsm_tick_lock)) return;
 
-          if (id(last_flow_millis) == 0)
+          // Mode manuel via UI/driver
+          if (id(driver_busy)) return;
+
+          id(fsm_tick_lock) = true;      
+          switch (id(machine_state))
           {
-            id(last_flow_millis) = now_m;
-            return;
+
+            case ST_SELECT_VANNE:
+            {
+                id(vanne_active)=id(next_event_index);
+
+                if ((id(vanne_active)<0) || (id(vanne_active)>=4))
+                {
+                    id(machine_state)=ST_SLEEP;
+                    break;
+                }
+                id(machine_state)=ST_OPEN_VANNE;
+                break;
+            }
+            // -------------------------
+            case ST_OPEN_VANNE:
+            {
+              if (millis() - id(state_timer) < 500)  break;
+              ESP_LOGI("FSM", "OPEN VANNE %d", id(vanne_active));
+
+              id(open_vanne).execute(id(vanne_active));
+
+              id(state_timer) = millis();
+
+              id(machine_state) = ST_WATERING;
+
+              break;
+            }
+
+            // -------------------------
+            case ST_WATERING:
+            {
+              uint32_t duration =  id(vanne_duration)[id(vanne_active)] * 60000;
+
+              if (millis() - id(state_timer) >= duration)
+              {
+                id(machine_state) = ST_CLOSE_VANNE;
+              }
+
+              break;
+            }
+
+            // -------------------------
+            case ST_CLOSE_VANNE:
+            {
+              ESP_LOGI("FSM", "CLOSE VANNE %d", id(vanne_active));
+              id(close_vanne).execute(id(vanne_active));
+              id(machine_state) = ST_NEXT_EVENT;
+
+              break;
+            }
+            // -------------------------
+            case ST_NEXT_EVENT:
+
+              id(compute_next_event).execute(); 
+              id(machine_state) = ST_SLEEP;
+              break;
+            // -------------------------
+
+            // -------------------------
+            case ST_IDLE:
+
+            // Start to WAit 10min sans Deep Sleep
+              id(state_timer) = millis();
+
+              // Run calcul event
+              id(scheduler_check).execute();
+
+              id(machine_state) = ST_TIMEOUT;
+              
+              // No deep Sleep
+              id(mode_init) = true;              
+              break;
+            // -------------------------
+
+
+            case ST_TIMEOUT:
+            {
+              uint32_t duration_manual_idle =  600000;
+
+              if (millis() - id(state_timer) >= duration_manual_idle)
+              {
+
+                    if (id(vanne_active) >= 0 && id(vanne_active) < 4)
+                    {
+                      // forcer la fermeture de toutes les vannes apres un delai de 10min                    
+                      // pas que de la derniere vanne_active =>  TODO
+                      id(machine_state) = ST_MANUAL_CLOSE;
+                    }
+                    else
+                    {
+                      id(machine_state) = ST_SLEEP;
+                    }
+                    id(mode_init) = false;  // fin des 10 min d'accès manuelle config sans boot
+              }
+              break;
+            }
+            // -------------------------
+            case ST_MANUAL_OPEN:
+            {
+              ESP_LOGI("FSM", "MANUAL OPEN %d", id(vanne_active));
+              if (id(vanne_active) >= 0 && id(vanne_active) < 4)
+              { 
+                id(open_vanne).execute(id(vanne_active));
+                id(machine_state) = ST_IDLE;
+              }
+              break;
+            }
+            // -------------------------
+            case ST_MANUAL_CLOSE:
+            {
+              ESP_LOGI("FSM", "MANUAL CLOSE vanne%d", id(vanne_active));
+              id(close_vanne).execute(id(vanne_active));
+              id(machine_state) = ST_SLEEP;
+
+              break;
+            }
+
+            // -------------------------
+            case ST_ERROR:
+            {
+              ESP_LOGE("FSM", "ERROR STATE");
+              id(fsm_lock) = false;   // IMPORTANT
+              id(machine_state) = ST_SLEEP;
+
+              break;
+            }
+
+            // -------------------------
+            case ST_SLEEP:
+            {
+              if (!id(system_ready))
+              {
+                ESP_LOGW("FSM", "Sleep blocked (system not ready)");
+                break;
+              }
+
+              if (!id(mode_init))
+              {
+                ESP_LOGI("FSM", "END -> SLEEP");
+
+                id(close_vanne_all).execute();
+                id(sleep_requested) = true;
+                id(fsm_lock)=false;
+                id(go_sleep).execute();
+              }
+              break;
+            }
           }
+          id(fsm_tick_lock) = false;
+        
 
-          float dt_min = (now_m - id(last_flow_millis)) / 60000.0;
-          id(last_flow_millis) = now_m;
 
-          float litres = id(flow_rate_lmin).state * dt_min;
 
-          switch (id(active_valve))
-          {
-            case 1: id(vanne1_volume) += litres; break;
-            case 2: id(vanne2_volume) += litres; break;
-            case 3: id(vanne3_volume) += litres; break;
-            case 4: id(vanne4_volume) += litres; break;
-          }
+  - id: go_sleep
+    mode: single
+    then:
+#     - script.execute: mqtt_publish_go_sleep            
+      - delay: 1s
+      - deep_sleep.enter: deep_sleep_ctrl
+
+
+  # -------------------------
+  # WATTERING ACTION Auto / Manual
+  # -------------------------
+interval:
+  - interval: 1s
+    then:
+      - script.execute: fsm_tick   
+
+  - interval: 30s
+    then:
+      - script.execute: scheduler_check

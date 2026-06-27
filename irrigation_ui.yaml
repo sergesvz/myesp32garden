@@ -1,0 +1,194 @@
+
+select:
+  - platform: template
+    name: "🚰 Vanne sélectionnée"
+    id: ui_vanne_selector
+    optimistic: true
+    options:
+      - "Vanne 0"
+      - "Vanne 1"
+      - "Vanne 2"
+      - "Vanne 3"
+    set_action:
+      - lambda: |-
+          if (x == "Vanne 0") id(ui_selected_vanne) = 0;
+          else if (x == "Vanne 1") id(ui_selected_vanne) = 1;
+          else if (x == "Vanne 2") id(ui_selected_vanne) = 2;
+          else if (x == "Vanne 3") id(ui_selected_vanne) = 3;
+          int i = id(ui_selected_vanne);
+          ESP_LOGI("UI", "Vanne sélectionnée=%d", id(ui_selected_vanne));
+          id(ui_tmp_days) = id(vanne_day)[i];
+          id(ui_tmp_hours) = id(vanne_hour)[i];
+          id(ui_tmp_minutes) = id(vanne_minute)[i];
+
+
+  - platform: template
+    name: "📅 Jours irrigation"
+    id: ui_days
+
+    options:
+      - "Lun"
+      - "Mar"
+      - "Mer"
+      - "Jeu"
+      - "Ven"
+      - "Sam"
+      - "Dim"
+      - "Tous"
+      - "Pairs"
+      - "Impairs"
+
+    set_action:
+      - lambda: |-
+          id(ui_tmp_days) = x;
+
+
+number:
+  - platform: template
+    name: "🕒 Heure"
+    id: ui_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      return id(vanne_hour)[i];
+    set_action:
+      - lambda: |-
+          int i = id(ui_selected_vanne);
+          if (i < 0 || i >= 4) return ;              
+          id(vanne_hour)[i] = (int)x;
+          id(ui_tmp_hours) = x;
+          ESP_LOGI("UI", "Vanne Heure=%d", id(vanne_hour)[i]);          
+
+  - platform: template
+    name: "🕒 Minute"
+    id: ui_minute
+    min_value: 0
+    max_value: 59
+    step: 5
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      return id(vanne_minute)[i];
+    set_action:
+      - lambda: |-
+          int i = id(ui_selected_vanne);
+          if (i < 0 || i >= 4) return ;              
+          id(vanne_minute)[i] = (int)x;
+          id(ui_tmp_minutes) = x;
+          ESP_LOGI("UI", "Vanne Minute=%d", id(vanne_minute)[i]); 
+
+  - platform: template
+    name: "🕒 Durée"
+    id: ui_duration
+    min_value: 0
+    max_value: 60
+    step: 5
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      return id(vanne_duration)[i];
+    set_action:
+      - lambda: |-
+          int i = id(ui_selected_vanne);
+          if (i < 0 || i >= 4) return ;          
+          id(vanne_duration)[i] = (int)x;
+          ESP_LOGI("UI", "Vanne Durée=%d", id(vanne_duration)[i]); 
+
+button:
+  - platform: template
+    name: "✔ Valider vanne"
+    id: ui_validate
+
+    on_press:
+      - lambda: |-
+          int i = id(ui_selected_vanne);
+
+          id(vanne_day)[i] = id(ui_tmp_days);
+          id(vanne_hour)[i] = id(ui_tmp_hours);
+          id(vanne_minute)[i] = id(ui_tmp_minutes);
+
+sensor:
+  - platform: template
+    name: "Volume"
+    id: ui_volume    
+    unit_of_measurement: "L"
+    device_class: water
+    state_class: measurement
+    update_interval: 60s
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      if (i < 0 || i >= 4) return NAN;   //sensor template must return float
+      return id(vanne_volume)[i];
+
+
+  - platform: template
+    name: "Cycle"
+    unit_of_measurement: "c"
+    state_class: total_increasing
+    update_interval: 60s
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      if (i < 0 || i >= 4) return  NAN;
+      return id(vanne_cycle)[i];
+
+text_sensor:
+  - platform: template
+    name: "📅 Jours"
+
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      if (i < 0 || i >= 4) return std::string("");  
+      uint8_t mask =  id(vanne_day)[i];
+      std::string s ="";
+      s += (mask & DAY_LUNDI)    ? "L" : "-";
+      s += (mask & DAY_MARDI)    ? "M" : "-";
+      s += (mask & DAY_MERCREDI) ? "M" : "-";
+      s += (mask & DAY_JEUDI)    ? "J" : "-";
+      s += (mask & DAY_VENDREDI) ? "V" : "-";
+      s += (mask & DAY_SAMEDI)   ? "S" : "-";
+      s += (mask & DAY_DIMANCHE) ? "D" : "-";
+      return s;
+
+  - platform: template
+    name: "🕒 Date & Heure"
+    update_interval: 30s
+    lambda: |-
+      auto now = id(ntp_time).now();
+      if (!now.is_valid()) return std::string("NTP invalid");
+
+      char buffer[32];
+      snprintf(buffer, sizeof(buffer),
+        "%02d/%02d/%04d %02d:%02d",
+        now.day_of_month,
+        now.month,
+        now.year,
+        now.hour,
+        now.minute
+      );
+      return std::string(buffer);
+
+  - platform: template
+    name: "📊 Vanne active config"
+    lambda: |-
+      int i = id(ui_selected_vanne);
+      return "Vanne " + id(ui_selected_vanne)
+           + " | J:" + id(vanne_day)[i]
+           + " | H:" + to_string(id(vanne_hour)[i])
+           + " | M:" + to_string(id(vanne_minute)[i]);
+
+
+switch:
+  # Switch DEBUG => STOP DEEP SLEEP
+  - platform: template
+    name: "Mode Init"
+    id: init_switch
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+    turn_on_action:
+      - lambda: |-
+          id(mode_init) = true;
+
+    turn_off_action:
+      - lambda: |-
+          id(mode_init) = false;

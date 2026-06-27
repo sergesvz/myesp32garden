@@ -13,6 +13,8 @@ binary_sensor:
     filters:
       - delayed_on: 50ms   # anti-rebond
 
+    id: user_button
+
 #    on_press:
 #      - logger.log: "Bouton pressé – prévention du deep‑sleep"
 #      - deep_sleep.prevent: deep_sleep_ctrl   # empêche le sommeil tant que le bouton est enfoncé  
@@ -21,8 +23,20 @@ binary_sensor:
       - timing:
           - ON for at least 5s
         then:
-          - logger.log: "Bouton pressé – prévention du deep‑sleep"
+          - logger.log: "Bouton pressé 5s: prévention du DeepSleep"
           - deep_sleep.prevent: deep_sleep_ctrl   # empêche le sommeil tant que le bouton est enfoncé  
+          - wifi.enable:
+          - delay: 10s
+          - logger.log: "Serveur Web actif"
           - lambda: |-
-              id(auto_mode) = false;
+              id(mode_init) = true;
               id(maintenance_mode) = true;
+              id(wifi_forced)=true;
+      - timing:              
+          - ON for at most 500ms
+          - OFF for at least 50ms
+        then:
+          - logger.log: "Bouton pressé 1 fois"            
+          - lambda: |-
+              id(click_count)++;
+              id(last_click)=millis();          

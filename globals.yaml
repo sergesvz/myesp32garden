@@ -1,81 +1,170 @@
 globals:
 
-  - id: event_valve
-    type: int[32]
+  - id: vanne_hour
+    type: int[4]
+    restore_value: yes
+    initial_value: '{6,6,6,6}'
 
-  - id: event_hour
-    type: int[32]
+  - id: vanne_minute
+    type: int[4]
+    restore_value: yes
+    initial_value: '{0,0,0,0}'
 
-  - id: event_minute
-    type: int[32]
+  - id: vanne_duration
+    type: int[4]
+    restore_value: yes
+    initial_value: '{10,10,10,10}'
 
-  - id: event_duration
-    type: int[32]
+  - id: vanne_day
+    type: uint8_t[4]
+    restore_value: yes
+    initial_value: '{127,127,127,127}'
 
-  - id: event_mask
-    type: uint8_t[32]
+  - id: vanne_volume
+    type: float[4]
+    restore_value: yes
+    initial_value: '{0,0,0,0}'
 
-  - id: active_valve
+  - id: vanne_cycle
+    type: int[4]
+    restore_value: yes
+    initial_value: '{0,0,0,0}'
+
+  - id: vanne_state
+    type: bool[4]
+    restore_value: yes
+    initial_value: '{false, false, false, false}'
+
+  - id: vanne_pulse_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "250"
+    
+  - id: vanne_active
     type: int
     restore_value: no
-    initial_value: '0'
+    initial_value: "-1"
 
   - id: irrigation_end_epoch
     type: uint32_t
-    restore_value: no
+    restore_value: yes    
 
   - id: next_event_index
     type: int
     restore_value: no
     initial_value: '-1'
 
-  - id: next_wake_epoch
-    type: uint64_t
-    restore_value: no
-    initial_value: '60000'
-
   - id: last_flow_millis
     type: uint32_t
     restore_value: no
     initial_value: '0'
 
-  - id: auto_mode
-    type: bool
-    restore_value: yes
-    initial_value: "true"
 
-  - id: maintenance_mode
-    type: bool
-    restore_value: no
-    initial_value: "false"
+#if button press No deep Sleep pour 5min
 
   - id: maintenance_timer
     type: int
     restore_value: no
     initial_value: '300'
 
-  - id: irrigation_lock
+  - id: mode_init
+    type: bool
+    restore_value: yes
+    initial_value: "true"
+
+  - id: go_sleep_pending
+    type: bool
+    initial_value: 'false'
+
+  - id: boot_epoch
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: boot_ready
+    type: bool
+    initial_value: 'false'
+
+  - id: sleep_requested
+    type: bool
+    initial_value: 'false'
+
+  - id: irrigation_active
+    type: bool
+    initial_value: 'false'
+
+  - id: ui_selected_vanne
+    type: int
+    restore_value: no
+    initial_value: "1"
+
+# gestion du bouton
+  - id: click_count
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: last_click
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: wifi_forced
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # -------------------------
+  # SCHEDULER
+  # -------------------------
+  - id: next_irrigation_epoch
+    type: uint32_t
+    restore_value: yes
+    initial_value: "0"
+
+  - id: fsm_lock
     type: bool
     restore_value: no
     initial_value: "false"
 
-  - id: debug_mode
+  - id: fsm_tick_lock
     type: bool
     restore_value: no
-    initial_value: "true"
+    initial_value: "false"
 
-switch:
-  # Switch DEBUG => STOP DEEP SLEEP
-  - platform: template
-    name: "Mode Debug Irrigation"
-    id: debug_switch
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
+#STATE
+  - id: machine_state
+    type: int
+    restore_value: no
+    initial_value: "0"
 
-    turn_on_action:
-      - lambda: |-
-          id(debug_mode) = true;
+  - id: state_timer
+    type: int
+    restore_value: no
+    initial_value: "0"
 
-    turn_off_action:
-      - lambda: |-
-          id(debug_mode) = false;
+  - id: watering_start
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+
+  - id: driver_busy
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: system_ready
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: ui_tmp_days
+    type: std::string
+    initial_value: '""'
+
+  - id: ui_tmp_hours
+    type: int
+    initial_value: '0'
+
+  - id: ui_tmp_minutes
+    type: int
+    initial_value: '0'

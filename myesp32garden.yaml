@@ -6,6 +6,8 @@ packages:
 
   boot:    !include packages/on_boot.yaml
   globals: !include packages/globals.yaml
+
+  drv8833: !include packages/vanne/drv8833.yaml
   api_key: !include packages/secrets/esp_385e88.yaml
 
   network: 
@@ -18,8 +20,8 @@ packages:
     !include  
     file: packages/deep_sleep.yaml
     vars:
-      deep_sleep_id: deep_sleep_ctrl
-      deep_sleep_pin: GPIO14
+#      deep_sleep_id: deep_sleep_ctrl
+#      deep_sleep_pin: GPIO33
       deep_sleep_status_pin: GPIO3    
 
   latch1: 
@@ -29,49 +31,35 @@ packages:
       sensor_name: "Maintenance button"
       switch_pin: GPIO4
 
+  ui:    !include packages/irrigation_ui.yaml
   vanne1: 
     !include  
     file: packages/vanne/parameters.yaml
     vars:
-      vanne_id: 1
-      vanne_pin: GPIO25
-
+      vanne_id: 0
+      vanne_pin_a: GPIO12
+      vanne_pin_b: GPIO13
   vanne2:
     !include   
     file: packages/vanne/parameters.yaml
     vars:
-      vanne_id: 2
-      vanne_pin: GPIO26      
+      vanne_id: 1
+      vanne_pin_a: GPIO16
+      vanne_pin_b: GPIO17
   vanne3: 
     !include  
     file: packages/vanne/parameters.yaml
     vars:
-      vanne_id: 3
-      vanne_pin: GPIO27      
+      vanne_id: 2
+      vanne_pin_a: GPIO18
+      vanne_pin_b: GPIO19
   vanne4: 
     !include
     file: packages/vanne/parameters.yaml
     vars:
-      vanne_id: 4
-      vanne_pin: GPIO32      
+      vanne_id: 3
+      vanne_pin_a: GPIO25
+      vanne_pin_b: GPIO26
 
-  soil1:
-    !include
-    file: packages/sensors/soil.yaml
-    vars:
-      sensor_name: "Humidité Zone"
-      sensor_id: soil1
-      sensor_pin: GPIO34
 
-  debimetre1:
-    !include
-    file: "packages/sensors/debimetre_yfb.yaml"
-    vars:
-      sensor_name: "Débit"
-      sensor_id: flow_rate
-      sensor_pin: GPIO33
-      sensor_pulse_factor: "450.0"
-      sensor_pulse_update: "5s"
-
-# scripts: !include packages/script.yaml
   scheduler: !include packages/scheduler.yaml

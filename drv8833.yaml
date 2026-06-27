@@ -1,0 +1,347 @@
+# ------------------------
+# ENA DRIVER (GPIO22)
+# ------------------------
+# can be calle multiple time , by instance
+# vars glo MUST be located on globals.yaml file
+# ------------------------
+# Etat	IN1	IN2
+# OPEN	1	  0
+# CLOSE	0	  1
+# STOP	0	  0
+# ------------------------
+
+
+output:
+  # drv1
+  - platform: gpio
+    id: drv1_ena
+    pin:
+      number: GPIO22
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv1_in1
+    pin:
+      number: GPIO18
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv1_in2
+    pin:
+      number: GPIO19
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv1_in3
+    pin:
+      number: GPIO25
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv1_in4
+    pin:
+      number: GPIO26
+      mode: OUTPUT
+
+  #drv2
+  - platform: gpio
+    id: drv2_ena
+    pin:
+      number: GPIO23
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv2_in1
+    pin:
+      number: GPIO14
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv2_in2
+    pin:
+      number: GPIO27
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv2_in3
+    pin:
+      number: GPIO32
+      mode: OUTPUT
+
+  - platform: gpio
+    id: drv2_in4
+    pin:
+      number: GPIO33
+      mode: OUTPUT
+
+# VANNE UNIQUE (STATEFUL)
+# -------------------------
+switch:
+
+#OUT1
+  - platform: template
+    name: "Vanne1"
+    id: vanne1
+    optimistic: true
+
+    lambda: |-
+      return id(vanne_state)[0];
+
+    turn_on_action:
+      - lambda: |-
+          id(vanne_active)=0;
+          id(machine_state)=ST_MANUAL_OPEN;    
+
+    turn_off_action:
+      - lambda: |-
+          id(vanne_active)=0;
+          id(machine_state)=ST_MANUAL_CLOSE;  
+
+#OUT2
+  - platform: template
+    name: "Vanne 2"
+    id: vanne2
+    optimistic: true    
+
+    lambda: |-
+      return id(vanne_state)[1];
+
+    turn_on_action:
+      - lambda: |-
+          id(vanne_active)=1;
+          id(machine_state)=ST_MANUAL_OPEN;    
+
+    turn_off_action:
+      - lambda: |-
+          id(vanne_active)=1;
+          id(machine_state)=ST_MANUAL_CLOSE;       
+
+#OUT3
+  - platform: template
+    name: "Vanne3"
+    id: vanne3
+    optimistic: true
+
+    lambda: |-
+      return id(vanne_state)[2];
+
+    turn_on_action:
+      - lambda: |-
+          id(vanne_active)=2;
+          id(machine_state)=ST_MANUAL_OPEN;    
+
+    turn_off_action:
+      - lambda: |-
+          id(vanne_active)=2;
+          id(machine_state)=ST_MANUAL_CLOSE;  
+
+#OUT4
+  - platform: template
+    name: "Vanne 4"
+    id: vanne4
+    optimistic: true    
+
+    lambda: |-
+      return id(vanne_state)[3];
+
+    turn_on_action:
+      - lambda: |-
+          id(vanne_active)=3;
+          id(machine_state)=ST_MANUAL_OPEN;    
+
+    turn_off_action:
+      - lambda: |-
+          id(vanne_active)=3;
+          id(machine_state)=ST_MANUAL_CLOSE;        
+            
+      
+script:
+
+# OPEN VANNE
+# -----------
+  - id: open_vanne
+    parameters:
+      index: int
+    mode: single  
+    then:
+      - lambda: |-
+
+          if (index < 0 || index >= 4)
+          {
+              ESP_LOGE("DRV", "Invalid valve index %d", index);
+              return;
+          }
+          // eviter plusieurs appels
+          if (id(driver_busy))  return;      
+          id(driver_busy) = true;
+
+          id(vanne_active) = index;
+          id(vanne_state)[index] = true;  
+          ESP_LOGI("DRV","OPEN %d", index);
+
+          if (index <= 1) id(drv1_ena).turn_on();
+          else id(drv2_ena).turn_on();
+
+      - delay: 20ms
+
+      # SET OUTPUTS OPEN
+      - lambda: |-
+          switch(index)
+          {
+            case 0:
+              id(drv1_in1).turn_on();
+              id(drv1_in2).turn_off();
+              break;
+
+            case 1:
+              id(drv1_in3).turn_on();
+              id(drv1_in4).turn_off();
+              break;
+
+            case 2:
+              id(drv2_in1).turn_on();
+              id(drv2_in2).turn_off();
+              break;
+
+            case 3:
+              id(drv2_in3).turn_on();
+              id(drv2_in4).turn_off();
+              break;
+          } 
+
+      - delay: !lambda 
+          return id(vanne_pulse_ms);
+
+      # SET OUTPUTS OFF
+      - lambda: |-
+          switch(index)
+          {
+            case 0:
+              id(drv1_in1).turn_off();
+              id(drv1_in2).turn_off();
+              break;
+
+            case 1:
+              id(drv1_in3).turn_off();
+              id(drv1_in4).turn_off();
+              break;
+
+            case 2:
+              id(drv2_in1).turn_off();
+              id(drv2_in2).turn_off();
+              break;
+
+            case 3:
+              id(drv2_in3).turn_off();
+              id(drv2_in4).turn_off();
+              break;
+          }
+          // Turn OFF les Enable pin
+          if (index <= 1) id(drv1_ena).turn_off();
+          else id(drv2_ena).turn_off();
+          
+          id(driver_busy) = false;
+    
+
+
+# CLOSE VANNE
+# -----------
+  - id: close_vanne
+    parameters:
+      index: int
+    mode: single   
+    then:
+      - lambda: |-
+
+          if (index < 0 || index >= 4)
+          {
+              ESP_LOGE("DRV", "Invalid valve index %d", index);
+              return;
+          }
+
+          // eviter plusieurs appels
+          if (id(driver_busy))  return;
+          id(driver_busy) = true; 
+
+          ESP_LOGI("DRV","CLOSE %d", index);
+          if (index <= 1) id(drv1_ena).turn_on();
+          else id(drv2_ena).turn_on();
+
+      - delay: 20ms
+
+      - lambda: |-
+          switch(index)
+          {
+            case 0:
+              id(drv1_in1).turn_off();
+              id(drv1_in2).turn_on();
+              break;
+
+            case 1:
+              id(drv1_in3).turn_off();
+              id(drv1_in4).turn_on();
+              break;
+
+            case 2:
+              id(drv2_in1).turn_off();
+              id(drv2_in2).turn_on();
+              break;
+
+            case 3:
+              id(drv2_in3).turn_off();
+              id(drv2_in4).turn_on();
+              break;
+          }
+
+      - delay: !lambda 
+          return id(vanne_pulse_ms);
+
+      # SET OUTPUTS OFF
+      - lambda: |-
+          switch(index)
+          {
+            case 0:
+              id(drv1_in1).turn_off();
+              id(drv1_in2).turn_off();
+              break;
+
+            case 1:
+              id(drv1_in3).turn_off();
+              id(drv1_in4).turn_off();
+              break;
+
+            case 2:
+              id(drv2_in1).turn_off();
+              id(drv2_in2).turn_off();
+              break;
+
+            case 3:
+              id(drv2_in3).turn_off();
+              id(drv2_in4).turn_off();
+              break;
+          }
+          // Turn OFF les Enable pin
+          if (index <= 1) id(drv1_ena).turn_off();
+          else id(drv2_ena).turn_off();
+
+          id(vanne_state)[index] = false;
+          id(vanne_active) = -1;
+          id(driver_busy) = false;          
+
+# CLOSE ALL
+# -----------
+  - id: close_vanne_all
+    mode: single  
+    then:
+
+      - output.turn_off: drv1_in1
+      - output.turn_off: drv1_in2
+      - output.turn_off: drv1_in3
+      - output.turn_off: drv1_in4
+      - output.turn_off: drv2_in1
+      - output.turn_off: drv2_in2
+      - output.turn_off: drv2_in3
+      - output.turn_off: drv2_in4
+
+      - output.turn_off: drv1_ena
+      - output.turn_off: drv2_ena

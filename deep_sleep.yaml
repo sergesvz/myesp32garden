@@ -8,11 +8,11 @@
 # -------------------------
 
 deep_sleep:
-  id: ${deep_sleep_id}
+  id: deep_sleep_ctrl
 
-  wakeup_pin:
-    number: ${deep_sleep_pin}
-    inverted: true
+#  wakeup_pin:
+#    number: ${deep_sleep_pin}
+#    inverted: true
 
 status_led:
   pin:

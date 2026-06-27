@@ -1,5 +1,6 @@
 # --------------------
 # Vanne paremeter
+# ce package est appelé pour chaque Vanne pour initialiser ${vanne_id}
 # -------------------
 globals:
     
@@ -8,162 +9,42 @@ globals:
     restore_value: yes
     initial_value: "0"
 
-  # selectionne le jour d'arrosage par vanne
-  - id: watering_vanne${vanne_id}_mask
-    type: uint8_t
-    restore_value: yes
-    initial_value: '0b0111110'
-
   - id: vanne${vanne_id}_cycles
     type: uint32_t
     restore_value: yes
     initial_value: "0"
 
+  - id: vanne${vanne_id}_state
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+
+    
 switch:
- # LUNDI
+ 
   - platform: template
-    name: "Vanne${vanne_id} J_Lundi"
-    optimistic: true
+    name: "🚰 Vanne ${vanne_id}"
+    id: sw_vanne${vanne_id}
+    optimistic: false
+
     lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 0);
+      return id(vanne_state)[${vanne_id}];
+
     turn_on_action:
       - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 0);
+          //if (id(fsm_lock) && id(machine_state) != ST_MANUAL_TIMEOUT)   return;      
+          id(vanne_active) = ${vanne_id};
+          ESP_LOGI("UI", "MANUAL OPEN vanne%d",${vanne_id});
+          id(machine_state) = ST_MANUAL_OPEN;
+
+
     turn_off_action:
       - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 0);
+          //if (id(fsm_lock))   return;
+          id(vanne_active) = ${vanne_id};
+          id(machine_state) = ST_MANUAL_CLOSE;
+          ESP_LOGI("UI", "MANUAL CLOSE vanne%d", ${vanne_id});
 
-  # MARDI
-  - platform: template
-    name: "Vanne${vanne_id} J_Mardi"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 1);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 1);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 1);
-
-  # MERCREDI
-  - platform: template
-    name: "Vanne${vanne_id} J_Mercredi"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 2);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 2);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 2);
-
-  # JEUDI
-  - platform: template
-    name: "Vanne${vanne_id} J_Jeudi"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 3);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 3);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 3);
-
-  # VENDREDI
-  - platform: template
-    name: "Vanne${vanne_id} J_Vendredi"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 4);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 4);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 4);
-
-  # SAMEDI
-  - platform: template
-    name: "Vanne${vanne_id} J_Samedi"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 5);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 5);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 5);
-
-  # DIMANCHE
-  - platform: template
-    name: "Vanne${vanne_id} J_Dimanche"
-    optimistic: true
-    lambda: |-
-      return id(watering_vanne${vanne_id}_mask) & (1 << 6);
-    turn_on_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) |= (1 << 6);
-    turn_off_action:
-      - lambda: |-
-          id(watering_vanne${vanne_id}_mask) &= ~(1 << 6);
-
-number:
-
-  - platform: template
-    name: "🕒Vanne${vanne_id} T_Heure"
-    id: vanne${vanne_id}_hour
-    min_value: 0
-    max_value: 23
-    step: 1
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "🕒Vanne${vanne_id} T_Minute"
-    id: vanne${vanne_id}_minute
-    min_value: 0
-    max_value: 59
-    step: 5
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "🕒Vanne${vanne_id} T_Durée (min)"
-    id: vanne${vanne_id}_duration
-    min_value: 0
-    max_value: 60
-    step: 5
-    restore_value: true
-    optimistic: true
-
-#text_sensor:
-#  - platform: template
-#    name: "Vanne${vanne_id} GPIO"
-#    id: vanne${vanne_id}_pin
-#    lambda: |-
-#      return id({vanne_pin});
-
-text_sensor:
-  - platform: template
-    name: "📅 Vanne${vanne_id} Jours"
-    lambda: |-
-      std::string s;
-
-      const char* days[7] = {"L","M","M","J","V","S","D"};
-
-      for (int i = 0; i < 7; i++)
-      {
-        if (id(watering_vanne${vanne_id}_mask) & (1 << i))
-          s += std::string("[") + days[i] + "]";
-        else
-          s += std::string(" - ";
-      }
-
-      return s;
       
 select:
   - platform: template
@@ -177,16 +58,16 @@ select:
       - "Week-end"
 
     lambda: |-
-      if (id(watering_vanne${vanne_id}_mask) == 0)
+      if (id(vanne_day)[${vanne_id}] == 0)
         return std::string("Off");
 
-      if (id(watering_vanne${vanne_id}_mask) == 0x7F)
+      if (id(vanne_day)[${vanne_id}] == (DAY_LUNDI | DAY_MARDI| DAY_MERCREDI | DAY_JEUDI | DAY_VENDREDI | DAY_SAMEDI | DAY_DIMANCHE))
         return std::string("Tous les jours");
 
-      if (id(watering_vanne${vanne_id}_mask) == ((1 << 0) | (1 << 2) | (1 << 4) | (1 << 6)))
+      if (id(vanne_day)[${vanne_id}] == (DAY_LUNDI | DAY_MERCREDI | DAY_VENDREDI | DAY_DIMANCHE))
         return std::string("Lun-Mer-Ven-Dim");
 
-      if (id(watering_vanne${vanne_id}_mask) == ((1 << 5) | (1 << 6)))
+      if (id(vanne_day)[${vanne_id}] == (DAY_SAMEDI | DAY_DIMANCHE))
         return std::string("Week-end");
 
       return std::string("Off");
@@ -194,67 +75,16 @@ select:
     set_action:
       - lambda: |-
           if (x == "Off")
-            id(watering_vanne${vanne_id}_mask) = 0;
+            id(vanne_day)[${vanne_id}] = 0;
 
           else if (x == "Tous les jours")
-            id(watering_vanne${vanne_id}_mask) = 0x7F;
+            id(vanne_day)[${vanne_id}] = DAY_LUNDI | DAY_MARDI| DAY_MERCREDI | DAY_JEUDI | DAY_VENDREDI | DAY_SAMEDI | DAY_DIMANCHE;
 
           else if (x == "Lun-Mer-Ven-Dim")
-            id(watering_vanne${vanne_id}_mask) =
-              (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6);
+            id(vanne_day)[${vanne_id}] =
+              DAY_LUNDI | DAY_MERCREDI | DAY_VENDREDI | DAY_DIMANCHE;
 
           else if (x == "Week-end")
-            id(watering_vanne${vanne_id}_mask) =
-              (1 << 5) | (1 << 6);
+            id(vanne_day)[${vanne_id}] =
+              DAY_SAMEDI | DAY_DIMANCHE;
 
-output:
-
-  - platform: gpio
-    pin: ${vanne_pin}
-    id: vanne${vanne_id}
-
-sensor:
-
-  - platform: template
-    name: "Vanne${vanne_id} Volume"
-    lambda: |-
-      return id(vanne${vanne_id}_volume);
-
-    unit_of_measurement: "L"
-    state_class: measurement
-    update_interval: 30s
-
-  - platform: template
-    name: "Vanne${vanne_id} Nombre de cycles"
-    lambda: |-
-      return id(vanne${vanne_id}_cycles);
-
-button:
-  - platform: template
-    name: "Vanne${vanne_id} Arrosage manuel"
-
-    on_press:
-      - script.execute: run_vanne${vanne_id}
-      
-# -------------------------
-# SCRIPTS VANNES IRRIGATION SAFE
-# -------------------------
-script:
-
-  - id: run_vanne${vanne_id}
-    mode: single
-    then:
-      - lambda: |-
-          id(active_valve) = ${vanne_id};
-          id(vanne${vanne_id}_cycles)++;
-      - deep_sleep.prevent: deep_sleep_ctrl
-      - output.turn_on: vanne${vanne_id}
-
-  - id: stop_vanne${vanne_id}
-    mode: single
-    then:
-      - output.turn_off: vanne${vanne_id}
-      - lambda: |-
-          id(active_valve) = 0;
-          id(irrigation_lock) = false;
-      - deep_sleep.allow: deep_sleep_ctrl

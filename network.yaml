@@ -8,7 +8,7 @@ wifi:
   power_save_mode: light
 
   manual_ip:
-    static_ip: ${network_ip}
+    static_ip: 192.168.1.44
     gateway: 192.168.1.1
     subnet: 255.255.255.0
     dns1: 192.168.1.1
@@ -30,9 +30,12 @@ api:
 # -------------------------
 # TEMPS
 # -------------------------
+# NTP
 time:
   - platform: sntp
     id: ntp_time
+    timezone: Europe/Paris
+
 
 # -------------------------
 # UPDATE OverTheAir
@@ -48,7 +51,7 @@ ota:
 mqtt:
   broker: !secret mqtt_broker
   port: 8883
-
+  id: mqtt_client
   username: !secret mqtt_username
   password: !secret mqtt_password
 

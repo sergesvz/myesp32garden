@@ -1,21 +1,40 @@
 esphome:
   name: ${device_name}
+#  includes:
+#    - packages/vanne/events.h
   includes:
-    - packages/vanne/events.h
+    - constants.h
 
   on_boot:
-    priority: -10
+    priority: 800
     then:
-      - script.execute: compute_next_event
-      - script.execute: go_sleep
+      - logger.log: "BOOT DEVICE"
+      - script.execute: close_vanne_all      
+
+      - lambda: |-
+          id(fsm_lock) = true;      
+          id(system_ready) = false;
+          id(machine_state) = ST_IDLE;
+ #     - script.execute: compute_next_event
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
+#    type: arduino
   
 logger:
-  level: INFO
+# level: INFO
+  level: DEBUG  
   logs:
     wifi: WARN
     api: WARN
+    mqtt: WARN
+    ota: WARN
+    sensor: WARN
+    pulse_counter: WARN
+    text_sensor: WARN
+    number: WARN
+    select: WARN
+    scheduler: INFO    
+#    switch: WARN
